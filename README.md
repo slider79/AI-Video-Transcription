@@ -156,6 +156,8 @@ No API keys needed. The Groq client and both network calls are replaced with fak
 
 **Why does the transcription tool, not the agent, save the file?** Saving where the transcript is produced guarantees that every transcript reaching the knowledge base is a real tool output with its source attached. The agent cannot save something it invented, because it never holds transcript text that did not come from the tool.
 
+**Transient errors are retried.** Gemini occasionally returns `503` (high demand) or `429` (rate limit). These are temporary, so the transcription tool retries them up to four times with exponential backoff (1s, 2s, 4s). Permanent errors, such as a missing model (`404`) or an invalid request (`400`), are raised immediately rather than retried, since a retry would only fail the same way.
+
 **Why cap the loop at six steps?** A tool-calling loop can in principle run forever if a tool keeps failing and the model keeps retrying. The cap turns that into a clear, bounded message instead of a hang.
 
 ---

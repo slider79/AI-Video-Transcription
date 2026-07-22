@@ -243,6 +243,68 @@ def test_transcription_saves_to_knowledge_base():
         check(result["source_url"] == "https://www.youtube.com/watch?v=ABC", "returns the source URL")
 
 
+def test_transcription_retries_transient_errors():
+    print("\nTranscriptionTool retries a transient 503, then succeeds")
+
+    class Boom(Exception):
+        def __init__(self, code):
+            self.code = code
+            super().__init__(f"{code} error")
+
+    class FlakyModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(self, **kwargs):
+            self.calls += 1
+            if self.calls < 3:      # fail twice with a retryable 503
+                raise Boom(503)
+            return SimpleNamespace(text="Recovered transcript.")
+
+    tool = TranscriptionTool(api_key="fake")
+    tool._RETRYABLE_CODES = (503,)  # keep the test focused
+    client = SimpleNamespace(models=FlakyModels())
+
+    # Patch sleep so the test does not actually wait.
+    import tools as tools_mod
+    import time as _time
+    original_sleep = _time.sleep
+    _time.sleep = lambda *_: None
+    try:
+        result = tool._generate_with_retry(client, {}, attempts=4)
+    finally:
+        _time.sleep = original_sleep
+
+    check(client.models.calls == 3, "retried twice, succeeded on the third attempt")
+    check(result.text == "Recovered transcript.", "returned the recovered response")
+
+
+def test_transcription_gives_up_on_permanent_error():
+    print("\nTranscriptionTool does not retry a permanent 404")
+
+    class Boom(Exception):
+        def __init__(self, code):
+            self.code = code
+            super().__init__(f"{code} not found")
+
+    class DeadModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(self, **kwargs):
+            self.calls += 1
+            raise Boom(404)  # not retryable
+
+    tool = TranscriptionTool(api_key="fake")
+    client = SimpleNamespace(models=DeadModels())
+    try:
+        tool._generate_with_retry(client, {}, attempts=4)
+        check(False, "should have raised ToolError")
+    except ToolError:
+        check(True, "raised ToolError without retrying")
+    check(client.models.calls == 1, "a 404 is not retried")
+
+
 def test_tool_schemas_are_wellformed():
     print("\nBoth tool schemas are valid function definitions")
     for schema, expected in ((VideoSearchTool.SCHEMA, "video_search"),
@@ -265,6 +327,8 @@ if __name__ == "__main__":
         test_search_tool_parses_serpapi,
         test_search_tool_needs_key,
         test_transcription_saves_to_knowledge_base,
+        test_transcription_retries_transient_errors,
+        test_transcription_gives_up_on_permanent_error,
         test_tool_schemas_are_wellformed,
     ):
         test()

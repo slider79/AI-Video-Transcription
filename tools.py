@@ -211,27 +211,54 @@ class TranscriptionTool:
             ) from exc
 
         client = genai.Client(api_key=self.api_key)
-        try:
-            response = client.models.generate_content(
-                model=self.model,
-                contents=types.Content(
-                    parts=[
-                        types.Part(file_data=types.FileData(file_uri=video_url)),
-                        types.Part(text=self.PROMPT),
-                    ]
-                ),
-                config=types.GenerateContentConfig(max_output_tokens=MAX_TRANSCRIPT_TOKENS),
-            )
-        except Exception as exc:  # noqa: BLE001 - surface any SDK/API error to the agent
-            raise ToolError(f"Gemini transcription failed: {exc}") from exc
+        request = dict(
+            model=self.model,
+            contents=types.Content(
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=video_url)),
+                    types.Part(text=self.PROMPT),
+                ]
+            ),
+            config=types.GenerateContentConfig(max_output_tokens=MAX_TRANSCRIPT_TOKENS),
+        )
 
-        transcript = (getattr(response, "text", None) or "").strip()
+        response = self._generate_with_retry(client, request)
         if not transcript:
             raise ToolError(
                 "Gemini returned an empty transcript. The video may be private, "
                 "age-restricted, region-locked, or have no speech."
             )
         return transcript
+
+    # Codes worth retrying: server overload/errors and rate limiting. These are
+    # transient; the request is likely to succeed on a second attempt.
+    _RETRYABLE_CODES = (500, 502, 503, 504, 429)
+
+    def _generate_with_retry(self, client, request, attempts: int = 4):
+        """Call Gemini, retrying transient errors (503 high-demand, 429 rate
+        limit, 5xx) with exponential backoff. Non-transient errors, such as a
+        missing model or an invalid request, are raised immediately."""
+        import time
+
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                return client.models.generate_content(**request)
+            except Exception as exc:  # noqa: BLE001 - inspect, then retry or raise
+                code = getattr(exc, "code", None)
+                if code not in self._RETRYABLE_CODES or attempt == attempts - 1:
+                    raise ToolError(f"Gemini transcription failed: {exc}") from exc
+                last_exc = exc
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                print(
+                    f"     Gemini returned {code}; retrying in {wait}s "
+                    f"(attempt {attempt + 2} of {attempts})...",
+                    flush=True,
+                )
+                time.sleep(wait)
+
+        # Unreachable, but keeps type checkers happy.
+        raise ToolError(f"Gemini transcription failed: {last_exc}")
 
     def _save(self, transcript: str, video_url: str, title: str) -> Path:
         self.knowledge_base.mkdir(parents=True, exist_ok=True)
