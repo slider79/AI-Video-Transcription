@@ -1,0 +1,16 @@
+[project]
+name = "video-transcription-agent"
+version = "1.0.0"
+description = "A tool-calling agent that finds and transcribes YouTube videos."
+requires-python = ">=3.12"
+dependencies = [
+    "groq>=0.13",
+    "google-genai>=0.3",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+# Vercel loads this handler as the function entrypoint. The value is
+# module:variable, so it loads `handler` from api/transcribe.py.
+[tool.vercel]
+entrypoint = "api.transcribe:handler"

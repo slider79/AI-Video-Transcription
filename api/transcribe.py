@@ -24,7 +24,9 @@ import sys
 os.environ.setdefault("KNOWLEDGE_BASE_DIR", "/tmp/knowledge_base")
 
 # Make the project root importable (this file lives in api/).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
+INDEX_HTML = os.path.join(ROOT_DIR, "index.html")
 
 from http.server import BaseHTTPRequestHandler  # noqa: E402
 
@@ -162,6 +164,24 @@ class handler(BaseHTTPRequestHandler):
         self._send(200 if result.get("ok") else 502, result)
 
     def do_GET(self) -> None:
+        # Serve the frontend at the root. In Vercel's single-entrypoint Python
+        # mode static files are not auto-served, so the handler serves the page
+        # itself. This is harmless if Vercel does serve it statically, since
+        # then this path is never reached.
+        path = self.path.split("?", 1)[0]
+        if path in ("/", "/index.html"):
+            try:
+                with open(INDEX_HTML, "rb") as fh:
+                    html = fh.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(html)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(html)
+                return
+            except OSError:
+                pass
         self._send(200, {"ok": True, "message": "POST a JSON body with a 'query' to transcribe a video."})
 
     def log_message(self, *args) -> None:  # noqa: D401 - silence default request logging

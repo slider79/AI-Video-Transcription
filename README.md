@@ -144,12 +144,21 @@ The frontend shows a **Tools used: `video_search` → `transcribe_video`** badge
 
 1. Push this repository to GitHub.
 2. Go to [vercel.com/new](https://vercel.com/new) and import the repository.
-3. Leave the framework preset as **Other**. No build command or output directory is needed; Vercel serves `index.html` and runs `api/transcribe.py` automatically.
+3. Leave the framework preset as **Other**. No build command or output directory is needed.
 4. Under **Environment Variables**, add all three keys:
    - `GROQ_API_KEY`
    - `SERPAPI_API_KEY`
    - `GEMINI_API_KEY`
 5. Click **Deploy**, then open the URL Vercel gives you.
+
+Vercel's Python runtime loads a single entrypoint, declared in `pyproject.toml`:
+
+```toml
+[tool.vercel]
+entrypoint = "api.transcribe:handler"
+```
+
+The `handler` in `api/transcribe.py` both serves the frontend (`GET /` returns `index.html`) and runs the agent (`POST /api/transcribe`), so the whole app is one function. Python source files are bundled automatically, so `agent.py` and `tools.py` are included without extra configuration.
 
 A couple of Vercel specifics that this project already handles:
 
@@ -184,8 +193,9 @@ For a portfolio or demo project this is an acceptable posture. A production serv
 ├── tools.py                    VideoSearchTool (SerpApi) and TranscriptionTool (Gemini)
 ├── index.html                  Web frontend (single page, no build step)
 ├── api/
-│   └── transcribe.py           Vercel serverless function wrapping the agent
-├── vercel.json                 Function config (maxDuration, bundled files)
+│   └── transcribe.py           Serverless handler: serves the page and runs the agent
+├── pyproject.toml              Declares the Vercel Python entrypoint
+├── vercel.json                 Function config (maxDuration)
 ├── requirements.txt            groq, google-genai, requests, python-dotenv
 ├── .env.example                template for the three API keys
 ├── .gitignore                  excludes .env, the venv and saved transcripts
