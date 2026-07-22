@@ -45,6 +45,28 @@ class ToolError(RuntimeError):
     """Raised when a tool cannot complete. The message is shown to the agent."""
 
 
+_KEY_ENV_VARS = ("GROQ_API_KEY", "SERPAPI_API_KEY", "GEMINI_API_KEY")
+
+
+def redact_secrets(text: str) -> str:
+    """Remove API keys from a string before it is logged or returned.
+
+    Redacts the exact key values currently in the environment (the most
+    reliable match) plus common key shapes, so an error message that happens
+    to include a request URL cannot leak a key. SerpApi in particular puts the
+    key in the request URL, which requests then echoes in HTTP error messages.
+    """
+    if not text:
+        return text
+    for var in _KEY_ENV_VARS:
+        value = os.environ.get(var)
+        if value and len(value) >= 8:
+            text = text.replace(value, "[redacted]")
+    text = re.sub(r"(api_key=)[^&\s\"']+", r"\1[redacted]", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(gsk_|AIza)[A-Za-z0-9_\-]{6,}", r"\1[redacted]", text)
+    return text
+
+
 # ---------------------------------------------------------------------------
 # Tool 1: Video search (SerpApi)
 # ---------------------------------------------------------------------------
@@ -100,11 +122,17 @@ class VideoSearchTool:
             response = requests.get(SERPAPI_ENDPOINT, params=params, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
+        except requests.HTTPError as exc:
+            # The request URL carries the api_key, and requests echoes the URL in
+            # HTTP error messages. Report only the status code so the key cannot
+            # leak through an error string.
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            raise ToolError(f"SerpApi request failed with HTTP {status}.") from None
         except requests.RequestException as exc:
-            raise ToolError(f"SerpApi request failed: {exc}") from exc
+            raise ToolError(f"SerpApi request failed: {redact_secrets(str(exc))}") from None
 
         if "error" in data:
-            raise ToolError(f"SerpApi returned an error: {data['error']}")
+            raise ToolError(f"SerpApi returned an error: {redact_secrets(str(data['error']))}")
 
         results = data.get("video_results") or []
         if not results:
@@ -227,6 +255,7 @@ class TranscriptionTool:
         )
 
         response = self._generate_with_retry(client, request)
+        transcript = (getattr(response, "text", None) or "").strip()
         if not transcript:
             raise ToolError(
                 "Gemini returned an empty transcript. The video may be private, "
@@ -251,7 +280,9 @@ class TranscriptionTool:
             except Exception as exc:  # noqa: BLE001 - inspect, then retry or raise
                 code = getattr(exc, "code", None)
                 if code not in self._RETRYABLE_CODES or attempt == attempts - 1:
-                    raise ToolError(f"Gemini transcription failed: {exc}") from exc
+                    raise ToolError(
+                        f"Gemini transcription failed: {redact_secrets(str(exc))}"
+                    ) from None
                 last_exc = exc
                 wait = 2 ** attempt  # 1s, 2s, 4s
                 print(
@@ -262,7 +293,7 @@ class TranscriptionTool:
                 time.sleep(wait)
 
         # Unreachable, but keeps type checkers happy.
-        raise ToolError(f"Gemini transcription failed: {last_exc}")
+        raise ToolError(f"Gemini transcription failed: {redact_secrets(str(last_exc))}")
 
     def _save(self, transcript: str, video_url: str, title: str) -> Path:
         self.knowledge_base.mkdir(parents=True, exist_ok=True)

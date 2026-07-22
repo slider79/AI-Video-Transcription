@@ -305,6 +305,66 @@ def test_transcription_gives_up_on_permanent_error():
     check(client.models.calls == 1, "a 404 is not retried")
 
 
+def test_redact_secrets_removes_keys():
+    print("\nredact_secrets strips key values and key-shaped tokens")
+    import os
+    from tools import redact_secrets
+
+    os.environ["GROQ_API_KEY"] = "gsk_supersecretvalue123456"
+    try:
+        msg = "failed for url ...&api_key=abcd1234efgh5678 with token gsk_supersecretvalue123456"
+        out = redact_secrets(msg)
+        check("gsk_supersecretvalue123456" not in out, "exact key value is removed")
+        check("abcd1234efgh5678" not in out, "api_key= query value is removed")
+        check("[redacted]" in out, "redaction marker is present")
+    finally:
+        os.environ.pop("GROQ_API_KEY", None)
+
+
+def test_serpapi_http_error_hides_key():
+    print("\nA SerpApi HTTP error never carries the api_key")
+    import tools as tools_mod
+    import requests
+
+    class FakeResp:
+        status_code = 401
+        url = "https://serpapi.com/search.json?search_query=x&api_key=LEAKYKEY999"
+        reason = "Unauthorized"
+
+        def raise_for_status(self):
+            raise requests.HTTPError(
+                f"401 Client Error: Unauthorized for url: {self.url}", response=self
+            )
+
+        def json(self):
+            return {}
+
+    tools_mod.requests.get = lambda *a, **k: FakeResp()
+    tool = VideoSearchTool(api_key="LEAKYKEY999")
+    try:
+        tool.run("anything")
+        check(False, "should have raised ToolError")
+    except ToolError as exc:
+        check("LEAKYKEY999" not in str(exc), "the key is not in the error message")
+        check("401" in str(exc), "the status code is still reported")
+
+
+def test_query_validation():
+    print("\nThe API validates and caps the query")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("h", str(ROOT / "api" / "transcribe.py"))
+    api = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(api)
+
+    check(api.clean_query(123)[1] is not None, "non-string is rejected")
+    check(api.clean_query("   ")[1] is not None, "blank query is rejected")
+    check(api.clean_query("x" * (api.MAX_QUERY_LEN + 1))[1] is not None, "over-long query is rejected")
+    q, err = api.clean_query("  black   holes\x00 explained ")
+    check(err is None, "a normal query passes")
+    check(q == "black holes explained", "control chars stripped and whitespace collapsed")
+
+
 def test_tool_schemas_are_wellformed():
     print("\nBoth tool schemas are valid function definitions")
     for schema, expected in ((VideoSearchTool.SCHEMA, "video_search"),
@@ -329,6 +389,9 @@ if __name__ == "__main__":
         test_transcription_saves_to_knowledge_base,
         test_transcription_retries_transient_errors,
         test_transcription_gives_up_on_permanent_error,
+        test_redact_secrets_removes_keys,
+        test_serpapi_http_error_hides_key,
+        test_query_validation,
         test_tool_schemas_are_wellformed,
     ):
         test()

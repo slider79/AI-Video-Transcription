@@ -158,6 +158,24 @@ A couple of Vercel specifics that this project already handles:
 
 ---
 
+## Security
+
+The keys live only in environment variables (`.env` locally, Vercel's encrypted store in production). They are never committed: `.env` is gitignored and the history is clean. The deliberate protections:
+
+- **Keys can never leak through an error.** SerpApi puts the API key in the request URL, which `requests` echoes back in HTTP error messages. That path is closed: SerpApi HTTP errors report only the status code, and every string the serverless function returns is passed through a `redact_secrets()` filter that strips both the exact key values and key-shaped tokens as a final safety net.
+- **Input is validated and capped.** The query must be a non-empty string, control characters are stripped, whitespace is collapsed, and the length is capped at 300 characters. Oversized request bodies are rejected before parsing.
+- **CORS is closed by default.** Cross-origin browser requests are refused unless the origin matches `ALLOWED_ORIGIN`. A same-origin deployment (the frontend calling its own `/api`) needs no configuration. Responses also set `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Cache-Control: no-store`.
+
+**One risk you should understand before sharing the URL.** A deployed `/api/transcribe` runs on *your* API keys, so anyone who calls it spends your SerpApi and Gemini quota. CORS restricts other *websites* from calling it in a browser, but it does not stop a script hitting the endpoint directly, that is what CORS fundamentally cannot do. The realistic mitigations are:
+
+1. Set spending or rate limits in the Groq, SerpApi, and Gemini dashboards.
+2. Keep the URL reasonably private rather than posting it publicly.
+3. Rely on Vercel's platform-level DDoS protection for volumetric abuse.
+
+For a portfolio or demo project this is an acceptable posture. A production service would add authentication and server-side rate limiting backed by a shared store (for example Vercel KV), which a single stateless function cannot do reliably on its own.
+
+---
+
 ## Project structure
 
 ```
