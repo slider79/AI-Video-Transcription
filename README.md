@@ -4,10 +4,15 @@
 
 A tool-calling AI agent that finds a YouTube video and transcribes it. The agent runs on Groq and is given two tools: one that searches for videos with SerpApi, and one that transcribes them with Gemini. The agent decides when to call each.
 
+It runs two ways: as a **command-line tool**, and as a **web app** (a browser frontend backed by a serverless function) deployable free on Vercel.
+
 ![Python](https://img.shields.io/badge/python-3.11%2B-1f4e79)
 ![Agent](https://img.shields.io/badge/agent-Groq_tool_calling-f55036)
 ![Search](https://img.shields.io/badge/search-SerpApi-4285f4)
 ![Transcription](https://img.shields.io/badge/transcription-Gemini-1b7a43)
+![Deploy](https://img.shields.io/badge/deploy-Vercel-000000)
+
+**Live app:** _add your Vercel URL here after deploying_
 
 ---
 
@@ -122,7 +127,34 @@ Tools used (in order): video_search -> transcribe_video
 python tests/test_agent.py
 ```
 
-No API keys needed. The Groq client and both network calls are replaced with fakes, so the tests exercise the real orchestration: that the agent calls both tools **in the right order**, feeds the search URL into the transcription step, saves the transcript with its source, cites the source in the final answer, and surfaces tool failures instead of inventing content.
+No API keys needed. The Groq client and both network calls are replaced with fakes, so the tests exercise the real orchestration: that the agent calls both tools **in the right order**, feeds the search URL into the transcription step, saves the transcript with its source, cites the source in the final answer, retries transient Gemini errors, and surfaces tool failures instead of inventing content.
+
+---
+
+## Web app
+
+The same agent is exposed through a browser frontend and a serverless function, so it can run without a terminal.
+
+- **`index.html`** is a single-page frontend: a search box, animated search-then-transcribe progress, and a result card showing the video, the transcript, the tools used, and the source link.
+- **`api/transcribe.py`** is a serverless function that receives `{"query": "..."}`, runs the exact same `VideoTranscriptionAgent`, and returns the transcript, the source, and the list of tools used as JSON.
+
+The frontend shows a **Tools used: `video_search` → `transcribe_video`** badge on every result, so tool use is visible in the UI, not just the terminal.
+
+### Deploying to Vercel (free)
+
+1. Push this repository to GitHub.
+2. Go to [vercel.com/new](https://vercel.com/new) and import the repository.
+3. Leave the framework preset as **Other**. No build command or output directory is needed; Vercel serves `index.html` and runs `api/transcribe.py` automatically.
+4. Under **Environment Variables**, add all three keys:
+   - `GROQ_API_KEY`
+   - `SERPAPI_API_KEY`
+   - `GEMINI_API_KEY`
+5. Click **Deploy**, then open the URL Vercel gives you.
+
+A couple of Vercel specifics that this project already handles:
+
+- **Read-only filesystem.** Vercel functions can only write to `/tmp`, so the function points the knowledge base there (`KNOWLEDGE_BASE_DIR=/tmp/...`). On the web, the transcript is returned to the browser; the saved file is ephemeral. The command-line tool still saves permanently to `knowledge_base/`.
+- **Function timeout.** `vercel.json` sets `maxDuration` to 60 seconds, the Hobby-plan maximum. That covers a short video; a long one may exceed it, which is the practical reason to keep test videos short.
 
 ---
 
@@ -132,10 +164,14 @@ No API keys needed. The Groq client and both network calls are replaced with fak
 .
 ├── agent.py                    The agent: Groq tool-calling loop and system prompt
 ├── tools.py                    VideoSearchTool (SerpApi) and TranscriptionTool (Gemini)
+├── index.html                  Web frontend (single page, no build step)
+├── api/
+│   └── transcribe.py           Vercel serverless function wrapping the agent
+├── vercel.json                 Function config (maxDuration, bundled files)
 ├── requirements.txt            groq, google-genai, requests, python-dotenv
 ├── .env.example                template for the three API keys
 ├── .gitignore                  excludes .env, the venv and saved transcripts
-├── knowledge_base/             saved transcripts land here
+├── knowledge_base/             saved transcripts land here (CLI runs)
 │   └── sample_transcript.md    shows the saved-file format
 ├── tests/
 │   └── test_agent.py           offline orchestration tests

@@ -104,11 +104,19 @@ class VideoTranscriptionAgent:
             return {"error": f"Unknown tool: {name}"}
         try:
             result = func(**args)
-            self.tool_calls.append({"tool": name, "args": args, "ok": True})
+            self.tool_calls.append({"tool": name, "args": args, "ok": True, "result": result})
             return result
         except ToolError as exc:
             self.tool_calls.append({"tool": name, "args": args, "ok": False, "error": str(exc)})
             return {"error": str(exc)}
+
+    def last_result(self, tool_name: str) -> dict | None:
+        """The most recent successful result for a tool, or None. Lets a caller
+        pull structured data (URL, title, transcript) rather than parse text."""
+        for call in reversed(self.tool_calls):
+            if call["tool"] == tool_name and call.get("ok"):
+                return call.get("result")
+        return None
 
     def run(self, user_request: str) -> str:
         messages = [

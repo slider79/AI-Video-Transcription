@@ -22,7 +22,11 @@ from pathlib import Path
 
 import requests
 
-KNOWLEDGE_BASE = Path(__file__).resolve().parent / "knowledge_base"
+# Where transcripts are saved. Overridable via KNOWLEDGE_BASE_DIR so a
+# read-only host (e.g. Vercel, where only /tmp is writable) can redirect it.
+KNOWLEDGE_BASE = Path(
+    os.environ.get("KNOWLEDGE_BASE_DIR") or (Path(__file__).resolve().parent / "knowledge_base")
+)
 SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
 
 # Default transcription model. Gemini Flash accepts a YouTube URL directly and

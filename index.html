@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Transcription Agent</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1a1d23;
+    --muted: #5f6875;
+    --line: #e3e8ef;
+    --accent: #1f4e79;
+    --accent-ink: #ffffff;
+    --search: #4285f4;
+    --transcribe: #1b7a43;
+    --bad: #b3261e;
+    --shadow: 0 6px 24px rgba(20, 30, 50, 0.08);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1420;
+      --card: #171e2c;
+      --ink: #e8ecf3;
+      --muted: #9aa4b2;
+      --line: #26304180;
+      --accent: #4d8fd6;
+      --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  .badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .chip {
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line); color: var(--muted);
+  }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin: 0; font-size: 15px; }
+
+  .search {
+    display: flex; gap: 10px; background: var(--card); padding: 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .search input {
+    flex: 1; border: none; background: transparent; color: var(--ink);
+    font-size: 16px; padding: 10px 12px; outline: none;
+  }
+  .search button {
+    border: none; background: var(--accent); color: var(--accent-ink);
+    font-size: 15px; font-weight: 600; padding: 0 22px; border-radius: 10px;
+    cursor: pointer; transition: filter 0.15s, opacity 0.15s;
+  }
+  .search button:hover:not(:disabled) { filter: brightness(1.08); }
+  .search button:disabled { opacity: 0.6; cursor: default; }
+
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 2px 0; }
+  .examples button {
+    font-size: 13px; color: var(--muted); background: transparent;
+    border: 1px dashed var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  }
+  .examples button:hover { color: var(--ink); border-color: var(--accent); }
+
+  .note { text-align: center; color: var(--muted); font-size: 13px; margin-top: 14px; }
+
+  /* status / loading */
+  .status { margin-top: 26px; }
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step {
+    display: flex; align-items: center; gap: 12px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; color: var(--muted);
+  }
+  .step .dot {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line);
+    flex-shrink: 0; display: grid; place-items: center; font-size: 12px;
+  }
+  .step.active { color: var(--ink); }
+  .step.active .dot { border-color: var(--accent); border-top-color: transparent; animation: spin 0.8s linear infinite; }
+  .step.done .dot { background: var(--transcribe); border-color: var(--transcribe); color: #fff; }
+  .step.done .dot::after { content: "✓"; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* result */
+  .result { margin-top: 26px; display: none; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .vid { padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .vid h2 { font-size: 18px; margin: 0 0 6px; }
+  .vmeta { font-size: 13px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+  .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 20px 0; font-size: 13px; }
+  .tools .label { color: var(--muted); }
+  .tool-badge {
+    font-weight: 600; padding: 3px 10px; border-radius: 999px; color: #fff; font-size: 12px;
+  }
+  .tool-badge.search { background: var(--search); }
+  .tool-badge.transcribe { background: var(--transcribe); }
+  .arrow { color: var(--muted); }
+
+  .transcript-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 20px 8px; }
+  .transcript-head span { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .copy { font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted);
+          padding: 4px 10px; border-radius: 8px; cursor: pointer; }
+  .copy:hover { color: var(--ink); border-color: var(--accent); }
+  .transcript {
+    margin: 0 20px 18px; padding: 16px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 10px; max-height: 340px; overflow-y: auto; white-space: pre-wrap;
+    font-size: 14.5px; line-height: 1.7;
+  }
+  .source { margin: 0 20px 20px; font-size: 14px; }
+  .source a { color: var(--accent); word-break: break-all; }
+
+  .error {
+    margin-top: 26px; background: var(--card); border: 1px solid var(--bad);
+    border-left-width: 4px; border-radius: 12px; padding: 16px 18px; display: none;
+  }
+  .error strong { color: var(--bad); }
+  .error p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="badge-row">
+        <span class="chip">Groq agent</span>
+        <span class="chip">SerpApi search</span>
+        <span class="chip">Gemini transcription</span>
+      </div>
+      <h1>🎬 Video Transcription Agent</h1>
+      <p>Describe a video. The agent finds it on YouTube and transcribes it.</p>
+    </header>
+
+    <div class="search">
+      <input id="q" type="text" placeholder="e.g. a short video about black holes"
+             autocomplete="off" />
+      <button id="go">Transcribe</button>
+    </div>
+    <div class="examples" id="examples">
+      <button>a short video about black holes</button>
+      <button>how photosynthesis works</button>
+      <button>motorcycle types for beginners</button>
+    </div>
+    <div class="note">
+      The agent searches, then transcribes with Gemini. Transcription can take up to a minute for a short video.
+    </div>
+
+    <div class="status" id="status" style="display:none">
+      <div class="steps">
+        <div class="step" id="step-search"><span class="dot"></span> Searching YouTube for the video</div>
+        <div class="step" id="step-transcribe"><span class="dot"></span> Transcribing with Gemini</div>
+      </div>
+    </div>
+
+    <div class="error" id="error">
+      <strong id="error-title">Something went wrong</strong>
+      <p id="error-msg"></p>
+    </div>
+
+    <div class="result" id="result">
+      <div class="card">
+        <div class="vid">
+          <h2 id="v-title">Video title</h2>
+          <div class="vmeta">
+            <span id="v-channel"></span>
+            <span id="v-length"></span>
+          </div>
+        </div>
+        <div class="tools">
+          <span class="label">Tools used:</span>
+          <span class="tool-badge search">video_search</span>
+          <span class="arrow">→</span>
+          <span class="tool-badge transcribe">transcribe_video</span>
+        </div>
+        <div class="transcript-head">
+          <span>Transcript</span>
+          <button class="copy" id="copy">Copy</button>
+        </div>
+        <div class="transcript" id="transcript"></div>
+        <div class="source">
+          <strong>Source:</strong> <a id="source" href="#" target="_blank" rel="noopener"></a>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Built by Shuja Jamal &middot; AI Internship, Spiral Labs
+    </footer>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const q = $("q"), go = $("go");
+  const statusEl = $("status"), resultEl = $("result"), errorEl = $("error");
+  const stepSearch = $("step-search"), stepTranscribe = $("step-transcribe");
+
+  $("examples").addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON") { q.value = e.target.textContent; q.focus(); }
+  });
+
+  q.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  go.addEventListener("click", submit);
+
+  $("copy").addEventListener("click", () => {
+    navigator.clipboard.writeText($("transcript").textContent).then(() => {
+      const b = $("copy"); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1500);
+    });
+  });
+
+  function setStep(el, state) {
+    el.classList.remove("active", "done");
+    if (state) el.classList.add(state);
+  }
+
+  async function submit() {
+    const query = q.value.trim();
+    if (!query) { q.focus(); return; }
+
+    go.disabled = true;
+    resultEl.style.display = "none";
+    errorEl.style.display = "none";
+    statusEl.style.display = "block";
+    setStep(stepSearch, "active");
+    setStep(stepTranscribe, "");
+
+    // The API is a single call; advance the visual steps on a timer so the
+    // user sees progress. The real result replaces this when it arrives.
+    const t = setTimeout(() => { setStep(stepSearch, "done"); setStep(stepTranscribe, "active"); }, 3500);
+
+    try {
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+      clearTimeout(t);
+
+      if (!res.ok || !data.ok) {
+        showError(data.error || "The request failed.", data.answer);
+        return;
+      }
+      showResult(data);
+    } catch (err) {
+      clearTimeout(t);
+      showError("Could not reach the server. " + err.message);
+    } finally {
+      go.disabled = false;
+      statusEl.style.display = "none";
+    }
+  }
+
+  function showResult(data) {
+    const v = data.video || {};
+    $("v-title").textContent = v.title || "Video";
+    $("v-channel").textContent = v.channel ? "📺 " + v.channel : "";
+    $("v-length").textContent = v.length && v.length !== "unknown" ? "⏱ " + v.length : "";
+    $("transcript").textContent = data.transcript || "";
+    const src = data.source || "#";
+    $("source").textContent = src;
+    $("source").href = src;
+    resultEl.style.display = "block";
+    resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function showError(msg, detail) {
+    $("error-msg").textContent = detail ? msg + "  " + detail : msg;
+    errorEl.style.display = "block";
+  }
+</script>
+</body>
+</html>

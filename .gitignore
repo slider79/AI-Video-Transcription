@@ -17,6 +17,13 @@ knowledge_base/*
 !knowledge_base/.gitkeep
 !knowledge_base/sample_transcript.md
 
+# Vercel
+.vercel
+
+# Local dev server logs
+srv.log
+srverr.log
+
 # OS / editors
 Thumbs.db
 Desktop.ini

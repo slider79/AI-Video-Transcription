@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/transcribe.py": {
+      "maxDuration": 60,
+      "includeFiles": "*.py"
+    }
+  }
+}
