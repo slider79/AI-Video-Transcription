@@ -1,0 +1,26 @@
+# Secrets - never commit these
+.env
+.env.*
+!.env.example
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Saved transcripts (keep the folder, not its contents)
+knowledge_base/*
+!knowledge_base/.gitkeep
+!knowledge_base/sample_transcript.md
+
+# OS / editors
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp

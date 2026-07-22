@@ -1,0 +1,4 @@
+groq>=0.13
+google-genai>=0.3
+requests>=2.31
+python-dotenv>=1.0
