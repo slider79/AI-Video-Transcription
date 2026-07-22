@@ -26,8 +26,15 @@ KNOWLEDGE_BASE = Path(__file__).resolve().parent / "knowledge_base"
 SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
 
 # Default transcription model. Gemini Flash accepts a YouTube URL directly and
-# is fast and inexpensive, which suits transcription. Override with GEMINI_MODEL.
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# is fast and inexpensive, which suits transcription. "gemini-flash-latest" is
+# an alias that always points at the current Flash model, so it does not get
+# retired the way a pinned version (e.g. gemini-2.5-flash) eventually does.
+# Override with GEMINI_MODEL.
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
+
+# Upper bound on transcript length. 8192 tokens comfortably covers a short
+# video; raise it for longer material.
+MAX_TRANSCRIPT_TOKENS = 8192
 
 
 class ToolError(RuntimeError):
@@ -213,6 +220,7 @@ class TranscriptionTool:
                         types.Part(text=self.PROMPT),
                     ]
                 ),
+                config=types.GenerateContentConfig(max_output_tokens=MAX_TRANSCRIPT_TOKENS),
             )
         except Exception as exc:  # noqa: BLE001 - surface any SDK/API error to the agent
             raise ToolError(f"Gemini transcription failed: {exc}") from exc

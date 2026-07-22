@@ -2,7 +2,7 @@
 
 - **Title:** Example, illustrative output only
 - **Source:** https://www.youtube.com/watch?v=EXAMPLE
-- **Model:** gemini-2.5-flash
+- **Model:** gemini-flash-latest
 - **Transcribed:** 2026-07-22T00:00:00
 
 ---
