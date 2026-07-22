@@ -25,7 +25,10 @@ from groq import Groq
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()  # read a local .env if present; a no-op otherwise
+    # encoding="utf-8-sig" tolerates a byte-order mark, which some Windows
+    # editors add to the first line and which would otherwise corrupt the
+    # first variable's name (e.g. it becomes "﻿GROQ_API_KEY").
+    load_dotenv(encoding="utf-8-sig")
 except ImportError:
     pass
 
