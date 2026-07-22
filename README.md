@@ -1,6 +1,6 @@
 # Video Search + Transcription Agent
 
-**By Shuja Jamal** (AI Internship, Spiral Labs)
+**By Shuja Jamal**
 
 A tool-calling AI agent that finds a YouTube video and transcribes it. The agent runs on Groq and is given two tools: one that searches for videos with SerpApi, and one that transcribes them with Gemini. The agent decides when to call each.
 
@@ -12,7 +12,7 @@ It runs two ways: as a **command-line tool**, and as a **web app** (a browser fr
 ![Transcription](https://img.shields.io/badge/transcription-Gemini-1b7a43)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000)
 
-**Live app:** _add your Vercel URL here after deploying_
+**Live app:** [ai-video-transcription-wh8v-lime.vercel.app](https://ai-video-transcription-wh8v-lime.vercel.app)
 
 ---
 
@@ -226,4 +226,4 @@ For a portfolio or demo project this is an acceptable posture. A production serv
 
 ---
 
-*Built for the AI Internship at Spiral Labs, July 2026.*
+*By Shuja Jamal, July 2026.*
