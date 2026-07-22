@@ -34,7 +34,12 @@ except ImportError:
 
 from tools import TranscriptionTool, VideoSearchTool, ToolError
 
-DEFAULT_AGENT_MODEL = "llama-3.3-70b-versatile"
+# openai/gpt-oss-120b is used for the agent because it emits well-formed tool
+# calls reliably on Groq and calls tools sequentially. llama-3.3-70b was tried
+# first but intermittently produced a malformed tool-call format that Groq's
+# validator rejects, and tended to call both tools at once, which breaks the
+# dependency where transcription needs the URL that search returns.
+DEFAULT_AGENT_MODEL = "openai/gpt-oss-120b"
 MAX_STEPS = 6  # safety bound on the tool-calling loop
 
 SYSTEM_PROMPT = """You are a video research agent with exactly two tools:
@@ -117,6 +122,9 @@ class VideoTranscriptionAgent:
                 messages=messages,
                 tools=self.tools,
                 tool_choice="auto",
+                # One tool at a time, so transcribe_video always runs after
+                # video_search and receives the real URL rather than a guess.
+                parallel_tool_calls=False,
                 temperature=0.2,
             )
             message = response.choices[0].message

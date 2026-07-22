@@ -210,12 +210,20 @@ def test_search_tool_parses_serpapi(monkeypatch=None):
 
 def test_search_tool_needs_key():
     print("\nVideoSearchTool refuses without an API key")
-    tool = VideoSearchTool(api_key=None)
+    # Clear any real key that a local .env may have loaded, so this is
+    # deterministic on a developer machine and on a clean checkout alike.
+    import os
+
+    saved = os.environ.pop("SERPAPI_API_KEY", None)
     try:
+        tool = VideoSearchTool(api_key=None)
         tool.run("x")
         check(False, "should have raised ToolError")
     except ToolError:
         check(True, "raises a clear ToolError when the key is missing")
+    finally:
+        if saved is not None:
+            os.environ["SERPAPI_API_KEY"] = saved
 
 
 def test_transcription_saves_to_knowledge_base():

@@ -34,7 +34,7 @@ Three services, each with a distinct job:
 
 | Component | Service | Role |
 | :--- | :--- | :--- |
-| **Agent / orchestration** | Groq (`llama-3.3-70b-versatile`) | Decides which tool to call and when, via tool calling |
+| **Agent / orchestration** | Groq (`openai/gpt-oss-120b`) | Decides which tool to call and when, via tool calling |
 | **Tool 1: `video_search`** | SerpApi (YouTube engine) | Finds a video, returns its URL |
 | **Tool 2: `transcribe_video`** | Gemini (`gemini-2.5-flash`) | Transcribes the video, saves the transcript |
 | **Knowledge base** | Local files | Every transcript saved with its source and model |
@@ -147,6 +147,8 @@ No API keys needed. The Groq client and both network calls are replaced with fak
 ## Design notes
 
 **Why Groq for the agent and Gemini for transcription?** They play to different strengths. Groq's tool calling is fast and OpenAI-compatible, which suits an orchestration loop that may take several turns. Gemini accepts a YouTube URL directly and transcribes the video natively, so the transcription tool needs no download step. Using both is also what the task's tech stack calls for.
+
+**Why `openai/gpt-oss-120b` and `parallel_tool_calls=False`?** The agent was first built on `llama-3.3-70b-versatile`, which had two problems on Groq: it intermittently emitted a malformed tool-call format that Groq's validator rejected outright, and it tended to request both tools in a single turn. The second is worse than it sounds, because `transcribe_video` needs the URL that `video_search` returns, so calling them together means transcribing a guessed URL. `openai/gpt-oss-120b` emits well-formed calls reliably, and `parallel_tool_calls=False` forces one tool per turn, so search always completes and hands its real URL to transcription.
 
 **Why call SerpApi over plain HTTP instead of an SDK?** The endpoint is a single documented GET request, and going direct with `requests` avoids depending on an SDK whose versions and import paths have changed over time. Fewer moving parts, and the request is easy to read.
 
